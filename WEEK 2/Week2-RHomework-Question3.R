@@ -49,7 +49,6 @@ abline(v = dif, col = "red")
 permTob
 difTob
 
-
 pvalueTob <- (sum(permTob>=difTob)+1)/(N+1); pvalueTob
 twoTailedTob <- 2*pvalueTob; twoTailedTob
 
