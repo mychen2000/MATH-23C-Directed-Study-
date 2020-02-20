@@ -6,6 +6,10 @@ table(met$W.L)
 wins <- (met$R>met$RA); length(wins); head(wins)
 sum(wins)#this will actually result in 40 wins
 
+#for this question, I had to be guided by the 
+#office hour a lot because I was pretty confused 
+#to start with
+
 #Part a:
 #need to find won which games
 index <- which(wins ==TRUE); index
