@@ -1,0 +1,175 @@
+---
+title: "Final Project"
+author: "Mark Chen"
+date: "5/11/2020"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+The data set is acquired from a Kaggle contest, named “IBM HR Analytics Employee Attrition & Performance,” at the link: https://www.kaggle.com/pavansubhasht/ibm-hr-analytics-attrition-dataset. This data set includes a comprehensive investigation of the employment status of 1470 employees at IBM and covers information of each individual employees such as daily, monthly payment rates, year of employment, job involvement and satisfaction levels, job categories and so on (a total of 34 columns). Overall, the 34 columns of 1470 samples form a desired data frame meeting the requirements listed for the assignment.
+
+I worked on this project completely independently, unless specifically denoted in my R file. We can take a look at each individual columns that include information invesgated in the survey that were regarded potentially related to the employee attrition level.
+
+```{r}
+summary(HRSurvey)
+```
+
+With the help of R, we can view several vital information of the data set via plotting:
+
+```{r}
+# Barplot
+barplot(table(HRSurvey$Department))
+
+# Histogram
+n<- 3
+Expected <- rep(M/n, n)
+Observed <- table(HRSurvey$Department); Observed
+chisq <- sum((Observed-Expected)^2/Expected); chisq
+N <- 40000; diff <- numeric(N)
+for (i in 1:N){
+   v <- sample(1:n, M, replace = TRUE)
+   Observed <- table(v)
+   diff[i] <- sum((Observed-Expected)^2/Expected)
+}
+hist(diff, prob = TRUE)
+
+# Probability Density Graph
+curve(dchisq(x, df = 2),add = TRUE, col = "red")
+
+# Contingency Table
+HRSurvey$EducationField
+table(HRSurvey$Department, 
+      HRSurvey$EducationField) #contingency table
+```
+
+After we have viewed these initial information of the data set, we can do some interesting analyses. Because there are several and comprehensive columns that are both quantitative and qualitative, which means my analyses can include many differen combinations of the correlation between specific data features. I was particularly interested in some of the social discussions, and this data set provided me opportunities to look at some of those within the tech industry, specifically within IBM. Of those social discussions, I looked at the relationship between Gender and Hourly Payments and between Years of Working Experience and Monthly Incomes.
+
+Firstly, I used permutation tests to test the evidence shown to support if Gender is related to the Hourly Payments:
+
+```{r}
+hrMale <- sum(HRSurvey$HourlyRate*(HRSurvey$Gender=="Male"))/sum(HRSurvey$Gender=="Male"); hrMale
+hrFemale <- sum(HRSurvey$HourlyRate*(HRSurvey$Gender=="Female"))/sum(HRSurvey$Gender=="Female"); hrFemale
+hrDiff <- hrFemale-hrMale; hrDiff
+#Repeat with a random sample, same size as the subset of men
+samp <- sample(nrow(HRSurvey), sum(HRSurvey$Gender == "Male")); samp
+#Find the mean for the random sample
+hrSamp <- mean(HRSurvey$HourlyRate[samp]); hrSamp
+hrOther <- mean(HRSurvey$HourlyRate[-samp]); hrOther
+#Run the permutation test
+diff <- hrSamp - hrOther; diff
+#Once it works, do it 10000 times
+N <- 10000
+diff <- numeric(N) 
+for (i in 1:N) {
+   samp <- sample(nrow(HRSurvey), sum(HRSurvey$Gender == "Male"))
+   hrSamp <- mean(HRSurvey$HourlyRate[samp]) #mean for the random sample
+   hrOther <- mean(HRSurvey$HourlyRate[-samp]); #mean for the complement of the random sample 
+   diff[i] <- hrSamp - hrOther
+}
+hist(diff)
+abline(v= hrDiff, col = "red") #observed difference is way out on the tail
+mean(diff >= hrDiff)
+```
+
+The result shows a P-Value of 0.4928, which equates to 49.28% confidence that the null hypothesis that Gender is not related to the Hourly Payments should be rejected. This level of confidence, obviously, is too high to reject the null hypothesis. Therefore, by using the Permutation Test, it is at least reasonable to conclude that the difference in gender is not a significant influencer to the difference in hourly payments.
+
+Also, I used both Student T-Tests and the Permutation Tests in comparison to test the correlation between Years of Working Experience and Monthly Income overall. Notedly, I was suggested and inspired by an email Mr. Michael Liotti sent out last week and wrote a similar automation function to get through th eprocess. See below for details:
+
+```{r}
+Automate <- function(x, y, alpha) { #x, y, and a significant level, alpha
+   #This function is suggested by Mr. Michael Liotti
+   Hypotheses <- list(
+      Null.Hyp = "H0: The true population means are equal", 
+      Alt.Hyp = "HA The true population means are not equal")
+   xbar <- mean(x); ybar <- mean(y); diff <- ybar - xbar
+   nx <- length(x); ny <- length(y)
+   SVarx <- 0 
+   
+   #SVarx is the sample variance of x
+   #Calculate the sample variance of y
+   for (i in 1:nx) {
+      iteration <- (x[i] - xbar)^2 / (nx - 1)
+      SVarx <- SVarx + iteration
+   }
+   SVary <- 0 # Initialize at 0 
+   
+   #calculate the weighted average of the sample variances of x and y
+   #compute t-statistics
+   for (i in 1:ny) {
+      iteration <- (y[i] - ybar)^2 / (ny - 1)
+      SVary <- SVary + iteration
+   }
+   Pooled <- (nx - 1)/(nx + ny - 2) * SVarx + (ny - 1)/(nx + ny - 2) * SVary
+   tstat <- (ybar - xbar)/sqrt(Pooled * (1/nx + 1/ny))
+   df <- nx + ny - 2 #two-sided p-value. 
+   # t-statistics is either positive or negative
+   if (tstat > -tstat) { # i.e., the t-statistic is positive
+      pvalue <- pt(-tstat, df) + pt(tstat, df, lower.tail = FALSE)
+   }
+   else # i.e., the t-statistic is negative 
+      pvalue <- pt(tstat, df) + pt(-tstat, df, lower.tail = FALSE)
+   # Test our null hypothesis. 
+   if (pvalue < alpha) {
+      TestPvalue <- "Reject the null hypothesis"
+   }
+   else {
+      TestPvalue <- "Fail to reject the null hypothesis"
+   }
+   #Find the upper and lower limits
+   LowerQuantile <- qt(alpha/2, df)
+   UpperQuantile <- qt(1 - alpha/2, df)
+   L <- (ybar - xbar) - sqrt(Pooled * (1/nx + 1/ny)) * UpperQuantile
+   U <- (ybar - xbar) - sqrt(Pooled * (1/nx + 1/ny)) * LowerQuantile
+   #Determine the interval based on the above limits
+   ConfInterval <- c(L,U)
+   #Determine the inclusiveness to decide whether to reject the null
+   #hypothesis or not
+   if (0 >= L & 0 < U) {
+      TestCI = "Fail to reject the null hypothesis"
+   }
+   else {
+      TestCI = "Reject the null hypothesis"
+   }
+   #find a region of observed values of the difference in which we would
+   #not reject the null hypothesis
+   A <- sqrt(Pooled * (1/nx + 1/ny)) * qt(alpha/2, df)
+   B <- sqrt(Pooled * ((1/nx) + (1/ny))) * qt(1 - alpha/2, df)
+   AcceptableRegion <- c(A,B)
+   # Let's test the null hypothesis, using our observed difference 
+   # in the sample means. 
+   if (diff < A | diff > B) {
+      TestRR <- "Reject the null hypothesis"
+   }
+   else {
+      TestRR <- "Fail to reject the null hypothesis"
+   }
+   # Create a list to return. 
+   Answer <- list(Hypotheses = Hypotheses, xbar = xbar, ybar = ybar, 
+                  diff = diff, SVarx = SVarx, SVary = SVary, Pooled = Pooled, 
+                  tstat = tstat, pvalue = pvalue, TestPvalue = TestPvalue, 
+                  ConfInterval = ConfInterval, TestCI = TestCI, 
+                  AcceptableRegion = AcceptableRegion, TestRR = TestRR)
+   # Return this list.
+   return(Answer)
+}
+
+confidence <- 0.95
+alpha <- 1-confidence
+x <- HRSurvey$TotalWorkingYears
+y <- HRSurvey$MonthlyIncome
+Automate(x, y, alpha)
+```
+
+The automation function gives comprehensive information about the important parameters of both the Student T-Test and the Permutation Test. Both tests, matchingly, reports sufficient evidence to reject the null hypothesis that Years of Working Experience do not influence Monthly Incomes. This is to say, both statistical tests provided evidence to claim that the more years of working one IBM employee has, the more monthly income that employee receives in a general sense.
+
+I also explored the distribution of population into the three general departments, namely Human Resources, Sales and Research & Developments by using a distribution function, as well as looked into the contingency table between Gender vs Attrition, The details of these two parts can be viewed along with my comments in the R Code. For the sake of reviewing time, I am not elaborting on the specific details and explanations.
+
+Overall, the data set reflects many significant or interesting phenomenon in the job market (or just specifically IBM) today.
